@@ -1,0 +1,13 @@
+{
+  "name": "notrecinema-schema",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Единственный источник истины для схемы PostgreSQL notrecinema: миграции, гранты и бутстрап роли app_user. От него зависят notrecinema-app, notrecinema-api и notrecinema-worker.",
+  "scripts": {
+    "migrate": "node migrate.mjs"
+  },
+  "dependencies": {
+    "pg": "^8.20.0"
+  }
+}

@@ -1,0 +1,59 @@
+# SAST/Secret Detection -- подключены через GitLab UI ("Configure SAST" /
+# "Configure Secret Detection"), stages и include ниже автогенерированы
+# оттуда же, не писались вручную.
+stages:
+  - test
+  - secret-detection
+
+include:
+  - template: Security/SAST.gitlab-ci.yml
+  - template: Security/Secret-Detection.gitlab-ci.yml
+
+variables:
+  SECRET_DETECTION_ENABLED: 'true'
+
+sast:
+  stage: test
+
+secret_detection:
+  stage: secret-detection
+
+workflow:
+  rules:
+    - if: '$CI_COMMIT_BRANCH'
+
+# Единственная осмысленная проверка для набора SQL-файлов -- реально
+# применить их к чистой базе и убедиться, что раннер (migrate.mjs)
+# отрабатывает от начала до конца: bootstrap app_user (init.sh), все
+# миграции по порядку, grants.sql. Синтаксическая линтовка SQL без
+# реального применения ловит меньше, чем сам факт "накатилось на чистую
+# базу без ошибок".
+migrate-on-fresh-database:
+  stage: test
+  image: node:24-alpine
+  services:
+    - name: postgres:16-alpine
+      alias: postgres
+  variables:
+    POSTGRES_DB: notrecinema_ci
+    POSTGRES_USER: postgres
+    POSTGRES_PASSWORD: ci-postgres-password
+    APP_DB_PASSWORD: ci-app-password
+    MIGRATE_DATABASE_URL: postgresql://postgres:ci-postgres-password@postgres:5432/notrecinema_ci
+    # init.sh сам вызывает psql без -h -- по умолчанию тот полез бы на
+    # localhost внутри контейнера джобы, где никакого Postgres нет:
+    # сервис "postgres" в GitLab CI живёт в СВОЁМ контейнере, доступном
+    # по алиасу сервиса. PGHOST/PGPASSWORD ниже -- это то, как psql узнаёт,
+    # куда на самом деле идти.
+    PGHOST: postgres
+    PGPASSWORD: ci-postgres-password
+  before_script:
+    - apk add --no-cache postgresql-client
+    - sh init.sh
+  script:
+    - npm install
+    - npm run migrate
+    # Повторный прогон должен быть no-op -- проверяет, что все миграции и
+    # init.sh идемпотентны, как того требует их собственный стиль
+    # (CREATE TABLE IF NOT EXISTS и т.д.).
+    - npm run migrate

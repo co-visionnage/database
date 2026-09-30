@@ -1,0 +1,17 @@
+#!/bin/sh
+set -eu
+
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<EOSQL
+DO \$\$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_user') THEN
+    CREATE ROLE app_user LOGIN PASSWORD '${APP_DB_PASSWORD}' NOSUPERUSER NOCREATEDB NOCREATEROLE;
+  ELSE
+    ALTER ROLE app_user WITH PASSWORD '${APP_DB_PASSWORD}';
+  END IF;
+END
+\$\$;
+
+GRANT CONNECT ON DATABASE ${POSTGRES_DB} TO app_user;
+GRANT USAGE ON SCHEMA public TO app_user;
+EOSQL
