@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  # Единственная осмысленная проверка для набора SQL-файлов -- реально
+  # применить их к чистой базе и убедиться, что раннер (migrate.mjs)
+  # отрабатывает от начала до конца: bootstrap app_user (init.sh), все
+  # миграции по порядку, grants.sql.
+  migrate-on-fresh-database:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: notrecinema_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-postgres-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      POSTGRES_DB: notrecinema_ci
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ci-postgres-password
+      APP_DB_PASSWORD: ci-app-password
+      MIGRATE_DATABASE_URL: postgresql://postgres:ci-postgres-password@localhost:5432/notrecinema_ci
+      # init.sh сам вызывает psql без -h -- PGHOST/PGPASSWORD говорят ему,
+      # куда на самом деле идти (сервис postgres проброшен на localhost:5432
+      # через ports: выше).
+      PGHOST: localhost
+      PGPASSWORD: ci-postgres-password
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install postgresql-client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Bootstrap app_user
+        run: sh init.sh
+
+      - run: npm install
+      - run: npm run migrate
+
+      # Повторный прогон должен быть no-op -- проверяет, что все миграции и
+      # init.sh идемпотентны (CREATE TABLE IF NOT EXISTS и т.д.).
+      - name: Re-run migrations (idempotency check)
+        run: npm run migrate
+
+  secret-detection:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
