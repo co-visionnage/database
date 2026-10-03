@@ -66,3 +66,5 @@ jobs:
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Для репозиториев организации gitleaks-action требует лицензию.
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
