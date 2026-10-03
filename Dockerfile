@@ -1,4 +1,4 @@
-FROM node:24-alpine
+FROM node:26-alpine
 WORKDIR /schema
 COPY package.json ./
 RUN npm install --omit=dev
